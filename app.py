@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'  # SQLite database file
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # Required for Flask-Login later
+app.config['SECRET_KEY'] = '22aa0cd08a839a23a061c102ce4bd644'  # Required for Flask-Login later
 db = SQLAlchemy(app)
 
 # Database Models
