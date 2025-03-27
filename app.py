@@ -1,5 +1,6 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'  # SQLite database file
@@ -32,6 +33,20 @@ with app.app_context():
 def home():
     listings = Listing.query.all()
     return render_template("index.html", listings=listings)
+
+@app.route("/post", methods=["GET", "POST"])
+def post_ad():
+    if request.method == "POST":
+        new_ad = Listing(
+            title=request.form["title"],
+            price=request.form["price"],
+            location=request.form["location"],
+            description=request.form["description"]
+        )
+        db.session.add(new_ad)
+        db.session.commit()
+        return redirect(url_for("home"))
+    return render_template("index.html")
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -1,4 +1,3 @@
- 
 <!DOCTYPE html>
 <html>
 <head>
@@ -7,22 +6,41 @@
 </head>
 <body class="bg-light">
     <div class="container mt-4">
-        <!-- Navbar -->
-        <nav class="navbar bg-primary mb-4 rounded">
-            <div class="container-fluid">
-                <a class="navbar-brand text-white" href="/">Wazobia List</a>
+        <h1 class="text-primary mb-4">Wazobia List</h1>
+        
+        <!-- Ad Posting Form -->
+        <div class="card shadow mb-4">
+            <div class="card-body">
+                <h5>Post a Free Ad</h5>
+                <form method="POST" action="/post">
+                    <div class="mb-3">
+                        <input type="text" name="title" placeholder="Title (e.g., iPhone 12)" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" name="price" placeholder="Price (e.g., ₦50,000)" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" name="location" placeholder="Location (e.g., Lagos)" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <textarea name="description" placeholder="Description" class="form-control"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Post Ad</button>
+                </form>
             </div>
-        </nav>
+        </div>
 
-        <!-- Ad Listing Cards -->
+        <!-- Display Ads -->
+        <h4 class="mb-3">Latest Listings</h4>
         <div class="row">
             {% for listing in listings %}
             <div class="col-md-4 mb-4">
                 <div class="card shadow">
                     <div class="card-body">
-                        <h5 class="card-title">{{ listing.title }}</h5>
+                        <h5>{{ listing.title }}</h5>
                         <p class="text-success">Price: {{ listing.price }}</p>
                         <p class="text-muted">Location: {{ listing.location }}</p>
+                        <p>{{ listing.description }}</p>
                     </div>
                 </div>
             </div>
