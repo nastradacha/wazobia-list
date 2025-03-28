@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Database
+instance/
+*.db
+*.sqlite
+*.db-journal
+
+# Environment
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Local development
+.DS_Store
+Thumbs.db
+
+# Render
+render.yaml

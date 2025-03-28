@@ -1,0 +1,14 @@
+# Handle line endings for all files
+* text=auto
+
+# Specific files that should keep LF endings
+migrations/alembic.ini text eol=lf
+migrations/env.py text eol=lf
+migrations/script.py.mako text eol=lf
+*.py.mako text eol=lf
+
+# Binary files should remain untouched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
