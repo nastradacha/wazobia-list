@@ -3,10 +3,12 @@ services:
     name: wazobia-list
     runtime: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    startCommand: "flask db upgrade && flask init-db && gunicorn app:app"
     envVars:
       - key: FLASK_ENV
         value: production
+      - key: FLASK_APP
+        value: "app.py"
       - key: DATABASE_URL
         generateValue: true
       - key: SECRET_KEY
