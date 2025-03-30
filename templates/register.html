@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title mb-4">Register</h3>
+                    <form method="POST" action="{{ url_for('register') }}">
+                        <div class="mb-3">
+                            <input type="text" name="username" class="form-control" 
+                                   placeholder="Username" required>
+                        </div>
+                        <div class="mb-3">
+                            <input type="email" name="email" class="form-control" 
+                                   placeholder="Email" required>
+                        </div>
+                        <div class="mb-3">
+                            <input type="tel" name="phone" class="form-control"
+                                   pattern="(^\+234[789][01]\d{8}$)|(^0[789][01]\d{8}$)"
+                                   placeholder="Phone (e.g., 08012345678)" required>
+                        </div>
+                        <div class="mb-3">
+                            <input type="password" name="password" class="form-control" 
+                                   placeholder="Password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-person-plus"></i> Register
+                        </button>
+                    </form>
+                    <div class="mt-3 text-center">
+                        <a href="{{ url_for('login') }}">Already have an account? Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
