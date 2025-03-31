@@ -2,19 +2,17 @@ services:
   - type: web
     name: wazobia-list
     runtime: python
-    buildCommand: |
-        mkdir -p instance &&
-        pip install -r requirements.txt
+    buildCommand: "pip install -r requirements.txt"
     startCommand: |
-        flask db upgrade &&
-        flask init-db &&
-        gunicorn app:app
+      flask db upgrade && 
+      flask init-db && 
+      gunicorn app:app
     envVars:
       - key: FLASK_ENV
         value: production
       - key: FLASK_APP
         value: "app.py"
       - key: DATABASE_URL
-        value: sqlite:////var/lib/render/instance/production.db
+        value: postgresql://wazobia_db_xszu_user:ozIy44XO5SjuDmNw4uZdquY1GDJWUfd3@dpg-cvlfau15pdvs73dcebog-a/wazobia_db_xszu
       - key: SECRET_KEY
         generateValue: true

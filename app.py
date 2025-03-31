@@ -21,9 +21,9 @@ os.makedirs(instance_path, exist_ok=True)
 
 
 # Database URI configuration
+# Remove SQLite fallback in production
 db_uri = os.getenv('DATABASE_URL')
-if not db_uri:
-    db_uri = f'sqlite:///{os.path.join(instance_path, "local.db")}'
+assert db_uri, "DATABASE_URL environment variable missing"
 
 if db_uri.startswith('postgres://'):
     db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
@@ -71,6 +71,22 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
+
+
+
+with app.app_context():
+    try:
+        db.create_all()
+    except Exception as e:
+        app.logger.error(f"Database initialization failed: {str(e)}")
+
+@app.route('/health')
+def health_check():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return 'OK', 200
+    except Exception as e:
+        return f'Database error: {str(e)}', 500
 
 
 # Login manager setup
