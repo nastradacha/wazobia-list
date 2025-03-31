@@ -5,13 +5,16 @@ services:
     buildCommand: |
         mkdir -p instance &&
         pip install -r requirements.txt
-    startCommand: "flask db upgrade && flask init-db && gunicorn app:app"
+    startCommand: |
+        flask db upgrade &&
+        flask init-db &&
+        gunicorn app:app
     envVars:
       - key: FLASK_ENV
         value: production
       - key: FLASK_APP
         value: "app.py"
       - key: DATABASE_URL
-        value: sqlite:///instance/production.db
+        value: sqlite:////var/lib/render/instance/production.db
       - key: SECRET_KEY
         generateValue: true
