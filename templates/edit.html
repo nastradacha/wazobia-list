@@ -31,10 +31,12 @@
                                 <select name="category_id" class="form-select" required>
                                     <option value="">Select Category</option>
                                     {% for category in categories %}
-                                        <option value="{{ category.id }}" 
+                                        <option value="{{ category.id }}"
                                             {% if category.id == listing.category_id %}selected{% endif %}>
                                             {{ category.name }}
                                         </option>
+                                    {% else %}
+                                        <option disabled>No categories available</option>
                                     {% endfor %}
                                 </select>
                             </div>

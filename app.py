@@ -100,13 +100,14 @@ def init_db():
     """Initialize the database with default categories"""
     with app.app_context():
         db.create_all()
-        if not Category.query.first():
-            categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
-            for name in categories:
-                if not Category.query.filter_by(name=name).first():
-                    db.session.add(Category(name=name))
-            db.session.commit()
-            print("Database initialized with default categories!")
+        default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
+        for name in default_categories:
+            category = Category.query.filter_by(name=name).first()
+            if not category:
+                db.session.add(Category(name=name))
+                print(f"Added category: {name}")
+        db.session.commit()
+        print("Database initialization complete!")
 
 # Auth Routes
 @app.route('/register', methods=['GET', 'POST'])
@@ -178,11 +179,18 @@ def home():
         listings = listings.filter(Listing.title.contains(search_query))
     if category_id:
         listings = listings.filter_by(category_id=category_id)
+
+    # Get categories with fallback
+    try:
+        categories = Category.query.order_by(Category.name).all()
+    except Exception as e:
+        app.logger.error(f"Error loading categories: {str(e)}")
+        categories = []
     
     return render_template(
         "index.html",
         listings=listings.all(),
-        categories=Category.query.all(),
+        categories=categories,
         selected_category=category_id,
         search_query=search_query,
         current_user=current_user
