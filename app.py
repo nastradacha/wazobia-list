@@ -14,8 +14,9 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839
 
 # Database configuration
 # Create absolute path to instance folder
-instance_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'instance'))
+instance_path = os.path.join(os.path.dirname(__file__), 'instance')
 os.makedirs(instance_path, exist_ok=True)
+
 
 # Database URI configuration
 db_uri = os.getenv('DATABASE_URL')
@@ -63,6 +64,14 @@ class Listing(db.Model):
     phone = db.Column(db.String(20), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+
+@app.before_first_request
+def initialize_data():
+    with app.app_context():
+        db.create_all()
+        init_db()
+
 
 # Login manager setup
 @login_manager.user_loader
