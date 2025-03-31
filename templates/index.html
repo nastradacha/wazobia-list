@@ -125,6 +125,22 @@
                         <h5 class="card-title">{{ listing.title }}</h5>
                         <h6 class="text-success mb-3">₦{{ listing.price }}</h6>
                         <p class="card-text flex-grow-1">{{ listing.description|truncate(100) }}</p>
+                        
+                        {% if current_user.is_authenticated and listing.user_id == current_user.id %}
+                        <div class="mt-2 d-flex gap-2">
+                            <a href="{{ url_for('edit_ad', id=listing.id) }}" 
+                               class="btn btn-sm btn-warning">
+                                <i class="bi bi-pencil"></i> Edit
+                            </a>
+                            <form action="{{ url_for('delete_ad', id=listing.id) }}" method="POST">
+                                <button type="submit" class="btn btn-sm btn-danger" 
+                                        onclick="return confirm('Delete this ad permanently?')">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+
                         <div class="mt-auto">
                             <a href="https://wa.me/{{ listing.phone }}?text=Hi! I saw your {{ listing.title }} on Wazobia List" 
                                class="btn btn-success w-100">
@@ -142,7 +158,6 @@
                     <p>Try adjusting your search or be the first to post!</p>
                 </div>
             </div>
-            
             {% endfor %}
         </div>
     </div>

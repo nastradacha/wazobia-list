@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h3 class="card-title mb-4"><i class="bi bi-pencil-square"></i> Edit Ad</h3>
+                    <form method="POST" action="{{ url_for('edit_ad', id=listing.id) }}">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <input type="text" name="title" placeholder="Title" 
+                                       class="form-control" value="{{ listing.title }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="price" placeholder="Price (₦)" 
+                                       class="form-control" value="{{ listing.price }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="location" placeholder="Location" 
+                                       class="form-control" value="{{ listing.location }}">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="tel" name="phone" 
+                                       pattern="(^\+234[789][01]\d{8}$)|(^0[789][01]\d{8}$)"
+                                       class="form-control" 
+                                       value="{{ listing.phone }}" required>
+                            </div>
+                            <div class="col-md-12">
+                                <select name="category_id" class="form-select" required>
+                                    <option value="">Select Category</option>
+                                    {% for category in categories %}
+                                        <option value="{{ category.id }}" 
+                                            {% if category.id == listing.category_id %}selected{% endif %}>
+                                            {{ category.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <textarea name="description" placeholder="Detailed description..." 
+                                          class="form-control" rows="4">{{ listing.description }}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-save"></i> Save Changes
+                                </button>
+                                <a href="{{ url_for('home') }}" class="btn btn-secondary">
+                                    Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

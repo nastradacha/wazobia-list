@@ -1,9 +1,10 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from pathlib import Path
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -12,9 +13,18 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644')
 
 # Database configuration
-db_uri = os.getenv('DATABASE_URL', 'sqlite:///site.db')
+# Create absolute path to instance folder
+instance_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'instance'))
+os.makedirs(instance_path, exist_ok=True)
+
+# Database URI configuration
+db_uri = os.getenv('DATABASE_URL')
+if not db_uri:
+    db_uri = f'sqlite:///{os.path.join(instance_path, "local.db")}'
+
 if db_uri.startswith('postgres://'):
     db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
+    
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -172,6 +182,52 @@ def post_ad():
     except Exception as e:
         db.session.rollback()
         flash(f"Error: {str(e)}", "danger")
+    return redirect(url_for("home"))
+
+@app.route('/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_ad(id):
+    listing = Listing.query.get_or_404(id)
+    
+    # Verify ownership
+    if listing.user_id != current_user.id:
+        abort(403)
+    
+    if request.method == 'POST':
+        try:
+            listing.title = request.form["title"]
+            listing.price = request.form["price"]
+            listing.location = request.form.get("location", "Lagos")
+            listing.description = request.form["description"]
+            listing.phone = request.form["phone"]
+            listing.category_id = request.form.get("category_id")
+            
+            db.session.commit()
+            flash("Ad updated successfully!", "success")
+            return redirect(url_for("home"))
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating ad: {str(e)}", "danger")
+    
+    categories = Category.query.all()
+    return render_template("edit.html", listing=listing, categories=categories)
+
+@app.route('/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_ad(id):
+    listing = Listing.query.get_or_404(id)
+    
+    if listing.user_id != current_user.id:
+        abort(403)
+    
+    try:
+        db.session.delete(listing)
+        db.session.commit()
+        flash("Ad deleted successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting ad: {str(e)}", "danger")
+    
     return redirect(url_for("home"))
 
 if __name__ == "__main__":
