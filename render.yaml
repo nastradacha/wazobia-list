@@ -2,10 +2,12 @@ services:
   - type: web
     name: wazobia-list
     runtime: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: |
+      pip install -r requirements.txt &&
+      flask db stamp head
     startCommand: |
-      flask db upgrade && 
-      flask init-db && 
+      flask db upgrade &&
+      flask init-db &&
       gunicorn app:app
     envVars:
       - key: FLASK_ENV

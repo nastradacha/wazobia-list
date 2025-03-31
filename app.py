@@ -1,33 +1,21 @@
 import os
+import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from pathlib import Path
 
 # Initialize Flask app
 app = Flask(__name__)
-
 
 # Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644')
 
 # Database configuration
-# Create absolute path to instance folder
-instance_path = os.path.join(os.path.dirname(__file__), 'instance')
-os.makedirs(instance_path, exist_ok=True)
-
-
-
-# Database URI configuration
-# Remove SQLite fallback in production
 db_uri = os.getenv('DATABASE_URL')
-assert db_uri, "DATABASE_URL environment variable missing"
-
-if db_uri.startswith('postgres://'):
+if db_uri and db_uri.startswith('postgres://'):
     db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
-    
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -37,9 +25,9 @@ migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Create tables immediately after app creation
-with app.app_context():
-    db.create_all()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+app.logger.addHandler(logging.StreamHandler())
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -47,7 +35,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)  # Increased length
     verified = db.Column(db.Boolean, default=False)
     
     def set_password(self, password):
@@ -71,43 +59,29 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-
-
-
-with app.app_context():
-    try:
-        db.create_all()
-    except Exception as e:
-        app.logger.error(f"Database initialization failed: {str(e)}")
-
-@app.route('/health')
-def health_check():
-    try:
-        db.session.execute(db.text('SELECT 1'))
-        return 'OK', 200
-    except Exception as e:
-        return f'Database error: {str(e)}', 500
-
+# Database initialization
+@app.cli.command("init-db")
+def init_db():
+    """Initialize the database with default categories"""
+    with app.app_context():
+        try:
+            db.create_all()
+            default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
+            for name in default_categories:
+                if not Category.query.filter_by(name=name).first():
+                    db.session.add(Category(name=name))
+                    app.logger.info(f'Added category: {name}')
+            db.session.commit()
+            app.logger.info('Database initialized successfully')
+        except Exception as e:
+            app.logger.error(f'Database initialization failed: {str(e)}')
+            db.session.rollback()
+            raise e
 
 # Login manager setup
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-# CLI Commands
-@app.cli.command("init-db")
-def init_db():
-    """Initialize the database with default categories"""
-    with app.app_context():
-        db.create_all()
-        default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
-        for name in default_categories:
-            category = Category.query.filter_by(name=name).first()
-            if not category:
-                db.session.add(Category(name=name))
-                print(f"Added category: {name}")
-        db.session.commit()
-        print("Database initialization complete!")
 
 # Auth Routes
 @app.route('/register', methods=['GET', 'POST'])
@@ -116,29 +90,38 @@ def register():
         return redirect(url_for('home'))
     
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        phone = request.form['phone']
-        password = request.form['password']
-        
-        user = User.query.filter((User.username == username) | 
-                                (User.email == email) | 
-                                (User.phone == phone)).first()
-        if user:
-            flash('Username, email or phone already exists', 'danger')
-            return redirect(url_for('register'))
-        
-        new_user = User(
-            username=username,
-            email=email,
-            phone=phone
-        )
-        new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
-        login_user(new_user)
-        flash('Registration successful!', 'success')
-        return redirect(url_for('home'))
+        try:
+            username = request.form['username']
+            email = request.form['email']
+            phone = request.form['phone']
+            password = request.form['password']
+            
+            user = User.query.filter(
+                (User.username == username) | 
+                (User.email == email) | 
+                (User.phone == phone)
+            ).first()
+            
+            if user:
+                flash('Username, email or phone already exists', 'danger')
+                return redirect(url_for('register'))
+            
+            new_user = User(
+                username=username,
+                email=email,
+                phone=phone
+            )
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            login_user(new_user)
+            flash('Registration successful!', 'success')
+            return redirect(url_for('home'))
+            
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'Registration error: {str(e)}')
+            flash('Error during registration. Please try again.', 'danger')
     
     return render_template('register.html')
 
@@ -151,9 +134,11 @@ def login():
         identifier = request.form['identifier']
         password = request.form['password']
         
-        user = User.query.filter((User.username == identifier) | 
-                                (User.email == identifier) | 
-                                (User.phone == identifier)).first()
+        user = User.query.filter(
+            (User.username == identifier) | 
+            (User.email == identifier) | 
+            (User.phone == identifier)
+        ).first()
         
         if user and user.check_password(password):
             login_user(user)
@@ -168,33 +153,33 @@ def logout():
     logout_user()
     return redirect(url_for('home'))
 
-# Routes
+# Main Routes
 @app.route("/")
 def home():
-    search_query = request.args.get('q', '')
-    category_id = request.args.get('category', type=int)
-    
-    listings = Listing.query
-    if search_query:
-        listings = listings.filter(Listing.title.contains(search_query))
-    if category_id:
-        listings = listings.filter_by(category_id=category_id)
-
-    # Get categories with fallback
     try:
+        search_query = request.args.get('q', '')
+        category_id = request.args.get('category', type=int)
+        
+        listings = Listing.query
+        if search_query:
+            listings = listings.filter(Listing.title.ilike(f'%{search_query}%'))
+        if category_id:
+            listings = listings.filter_by(category_id=category_id)
+        
         categories = Category.query.order_by(Category.name).all()
+        
+        return render_template(
+            "index.html",
+            listings=listings.all(),
+            categories=categories,
+            selected_category=category_id,
+            search_query=search_query
+        )
+        
     except Exception as e:
-        app.logger.error(f"Error loading categories: {str(e)}")
-        categories = []
-    
-    return render_template(
-        "index.html",
-        listings=listings.all(),
-        categories=categories,
-        selected_category=category_id,
-        search_query=search_query,
-        current_user=current_user
-    )
+        app.logger.error(f"Homepage error: {str(e)}")
+        flash("Error loading listings. Please try again later.", "danger")
+        return redirect(url_for('home'))
 
 @app.route("/post", methods=["POST"])
 @login_required
@@ -214,6 +199,7 @@ def post_ad():
         flash("Ad posted successfully!", "success")
     except Exception as e:
         db.session.rollback()
+        app.logger.error(f"Ad post error: {str(e)}")
         flash(f"Error: {str(e)}", "danger")
     return redirect(url_for("home"))
 
@@ -222,7 +208,6 @@ def post_ad():
 def edit_ad(id):
     listing = Listing.query.get_or_404(id)
     
-    # Verify ownership
     if listing.user_id != current_user.id:
         abort(403)
     
@@ -240,6 +225,7 @@ def edit_ad(id):
             return redirect(url_for("home"))
         except Exception as e:
             db.session.rollback()
+            app.logger.error(f"Ad update error: {str(e)}")
             flash(f"Error updating ad: {str(e)}", "danger")
     
     categories = Category.query.all()
@@ -259,6 +245,7 @@ def delete_ad(id):
         flash("Ad deleted successfully!", "success")
     except Exception as e:
         db.session.rollback()
+        app.logger.error(f"Ad delete error: {str(e)}")
         flash(f"Error deleting ad: {str(e)}", "danger")
     
     return redirect(url_for("home"))
