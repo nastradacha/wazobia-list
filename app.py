@@ -9,6 +9,7 @@ from pathlib import Path
 # Initialize Flask app
 app = Flask(__name__)
 
+
 # Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644')
 
@@ -16,6 +17,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839
 # Create absolute path to instance folder
 instance_path = os.path.join(os.path.dirname(__file__), 'instance')
 os.makedirs(instance_path, exist_ok=True)
+
 
 
 # Database URI configuration
@@ -34,6 +36,10 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+# Create tables immediately after app creation
+with app.app_context():
+    db.create_all()
 
 # Database Models
 class User(UserMixin, db.Model):
@@ -65,12 +71,6 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-
-@app.before_first_request
-def initialize_data():
-    with app.app_context():
-        db.create_all()
-        init_db()
 
 
 # Login manager setup
