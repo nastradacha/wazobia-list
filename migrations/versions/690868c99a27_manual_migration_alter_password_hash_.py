@@ -15,8 +15,16 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # For PostgreSQL, use raw SQL to alter the column type.
-    op.execute('ALTER TABLE "user" ALTER COLUMN password_hash TYPE VARCHAR(256);')
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        op.execute('ALTER TABLE "user" ALTER COLUMN password_hash TYPE VARCHAR(256);')
+    else:
+        # For SQLite or other dialects, you might want to do nothing or log a message.
+        pass
 
 def downgrade():
-    op.execute('ALTER TABLE "user" ALTER COLUMN password_hash TYPE VARCHAR(128);')
+    bind = op.get_bind()
+    if bind.dialect.name == 'postgresql':
+        op.execute('ALTER TABLE "user" ALTER COLUMN password_hash TYPE VARCHAR(128);')
+    else:
+        pass
