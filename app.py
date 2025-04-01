@@ -1,7 +1,7 @@
 import os
 import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, abort
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy, text
 from flask_migrate import Migrate
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -272,7 +272,7 @@ def delete_ad(id):
 
 @app.route('/migration-version')
 def migration_version():
-    result = db.engine.execute("SELECT version_num FROM alembic_version")
+    result = db.session.execute(text("SELECT version_num FROM alembic_version"))
     version = result.fetchone()[0]
     return f"Current migration revision: {version}"
 
