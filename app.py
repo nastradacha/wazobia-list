@@ -269,5 +269,12 @@ def delete_ad(id):
     
     return redirect(url_for("home"))
 
+
+@app.route('/migration-version')
+def migration_version():
+    result = db.engine.execute("SELECT version_num FROM alembic_version")
+    version = result.fetchone()[0]
+    return f"Current migration revision: {version}"
+
 if __name__ == "__main__":
     app.run()
