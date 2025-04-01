@@ -5,6 +5,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt &&
     startCommand: |
+      flask db stamp head &&
       flask db upgrade &&
       flask init-db &&
       gunicorn app:app
