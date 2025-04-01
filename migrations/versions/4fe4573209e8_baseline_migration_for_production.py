@@ -17,6 +17,7 @@ depends_on = None
 
 
 def upgrade():
+    # Baseline migration – no changes; production schema is already in place.
     pass
 
 
