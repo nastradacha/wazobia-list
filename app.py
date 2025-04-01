@@ -285,5 +285,11 @@ def check_password_hash_length():
     length = result.fetchone()[0]
     return f"password_hash column length: {length}"
 
+@app.route('/reset-db')
+def reset_db():
+    db.drop_all()
+    return "Database dropped."
+
+
 if __name__ == "__main__":
     app.run()
