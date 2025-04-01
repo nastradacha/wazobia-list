@@ -7,7 +7,6 @@ services:
     startCommand: |
       flask db stamp head &&
       flask db upgrade &&
-      flask init-db &&
       gunicorn app:app
     envVars:
       - key: FLASK_ENV
