@@ -5,7 +5,6 @@ services:
     buildCommand: |
       pip install -r requirements.txt &&
     startCommand: |
-      flask db stamp 4ea9eb061132 &&
       flask db upgrade &&
       gunicorn app:app
     envVars:
@@ -17,3 +16,4 @@ services:
         value: postgresql://wazobia_db_xszu_user:ozIy44XO5SjuDmNw4uZdquY1GDJWUfd3@dpg-cvlfau15pdvs73dcebog-a/wazobia_db_xszu
       - key: SECRET_KEY
         generateValue: true
+        
