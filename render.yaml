@@ -5,6 +5,7 @@ services:
     buildCommand: |
       pip install -r requirements.txt &&
     startCommand: |
+      flask db stamp 4ea9eb061132 &&
       flask db upgrade &&
       gunicorn app:app
     envVars:
