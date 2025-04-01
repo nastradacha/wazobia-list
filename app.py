@@ -35,7 +35,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)  # Increased length
+    password_hash = db.Column(db.String(256), nullable=False)  # Updated length to 256
     verified = db.Column(db.Boolean, default=False)
     
     def set_password(self, password):
@@ -59,7 +59,7 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-# Database initialization
+# Database initialization command
 @app.cli.command("init-db")
 def init_db():
     """Initialize the database with default categories"""
@@ -185,13 +185,23 @@ def home():
 @login_required
 def post_ad():
     try:
+        # Convert category_id from string to integer if provided
+        category_id = request.form.get("category_id")
+        if category_id:
+            try:
+                category_id = int(category_id)
+            except ValueError:
+                category_id = None
+        else:
+            category_id = None
+
         new_ad = Listing(
             title=request.form["title"],
             price=request.form["price"],
             location=request.form.get("location", "Lagos"),
             description=request.form["description"],
             phone=request.form["phone"],
-            category_id=request.form.get("category_id"),
+            category_id=category_id,
             user_id=current_user.id
         )
         db.session.add(new_ad)
@@ -218,7 +228,16 @@ def edit_ad(id):
             listing.location = request.form.get("location", "Lagos")
             listing.description = request.form["description"]
             listing.phone = request.form["phone"]
-            listing.category_id = request.form.get("category_id")
+            
+            # Convert category_id from string to integer if provided
+            category_id = request.form.get("category_id")
+            if category_id:
+                try:
+                    listing.category_id = int(category_id)
+                except ValueError:
+                    listing.category_id = None
+            else:
+                listing.category_id = None
             
             db.session.commit()
             flash("Ad updated successfully!", "success")
