@@ -279,7 +279,7 @@ def migration_version():
 
 @app.route('/check-password-hash-length')
 def check_password_hash_length():
-    result = db.engine.execute(text(
+    result = db.session.execute(text(
         "SELECT character_maximum_length FROM information_schema.columns "
         "WHERE table_name = 'user' AND column_name = 'password_hash';"))
     length = result.fetchone()[0]
