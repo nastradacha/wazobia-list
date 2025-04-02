@@ -1,129 +1,330 @@
 import os
 import logging
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+import random
+from datetime import datetime, timedelta
+from flask import (
+    Flask, render_template, request, redirect, 
+    url_for, flash, abort, session
+)
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_login import (
+    LoginManager, UserMixin, login_user,
+    logout_user, login_required, current_user
+)
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import text
+from sqlalchemy import text, Index, or_
+from sqlalchemy.orm import joinedload
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
-# Initialize Flask app
+# ---------------------------- #
+#        App Configuration      #
+# ---------------------------- #
+
 app = Flask(__name__)
+app.config.update(
+    SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644'),
+    SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', '').replace('postgres://', 'postgresql://', 1),
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=os.getenv('FLASK_ENV') == 'production',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=2)
+)
 
-# Configuration
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644')
+# ---------------------------- #
+#        Extensions Setup       #
+# ---------------------------- #
 
-# Database configuration
-db_uri = os.getenv('DATABASE_URL')
-if db_uri and db_uri.startswith('postgres://'):
-    db_uri = db_uri.replace('postgres://', 'postgresql://', 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Initialize extensions
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-app.logger.addHandler(logging.StreamHandler())
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 
-# Database Models
+# ---------------------------- #
+#         Logging Setup         #
+# ---------------------------- #
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------- #
+#      Database Models         #
+# ---------------------------- #
+
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    phone = db.Column(db.String(20), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)  # Updated length to 256
-    verified = db.Column(db.Boolean, default=False)
+    __tablename__ = 'users'
     
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(256), nullable=False)
+    verified = db.Column(db.Boolean, default=False)
+    listings = db.relationship('Listing', backref='user', lazy=True)
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+Index('ix_user_credentials', User.username, User.email, User.phone)
+
 class Category(db.Model):
+    __tablename__ = 'categories'
+    
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False, unique=True)
     listings = db.relationship('Listing', backref='category', lazy=True)
+    
+    def __repr__(self):
+        return f'<Category {self.name}>'
 
 class Listing(db.Model):
+    __tablename__ = 'listings'
+    
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
+    title = db.Column(db.String(100), nullable=False, index=True)
     price = db.Column(db.String(20))
     description = db.Column(db.Text)
     location = db.Column(db.String(50), default='Lagos')
     phone = db.Column(db.String(20), nullable=False)
-    category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Listing {self.title}>'
 
-# Optional CLI command for database initialization (for local testing)
-@app.cli.command("init-db")
-def init_db():
-    """Initialize the database with default categories"""
-    with app.app_context():
-        try:
-            db.create_all()
-            seed_default_categories()
-            app.logger.info('Database initialized successfully')
-        except Exception as e:
-            app.logger.error(f'Database initialization failed: {str(e)}')
-            db.session.rollback()
-            raise e
+class OTPVerification(db.Model):
+    __tablename__ = 'otp_verifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    otp = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f'<OTPVerification {self.user_id}>'
 
-def seed_default_categories():
-    """Seed default categories if none exist."""
-    default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
-    for name in default_categories:
-        if not Category.query.filter_by(name=name).first():
-            db.session.add(Category(name=name))
-            app.logger.info(f'Seeded category: {name}')
-    db.session.commit()
+# ---------------------------- #
+#       Helper Functions        #
+# ---------------------------- #
 
-# Login manager setup
+def generate_otp() -> str:
+    """Generate a 6-digit numeric OTP"""
+    return str(random.randint(100000, 999999))
+
+def send_otp_via_email(email: str, otp: str) -> bool:
+    """Mock email sending function (replace with real implementation in production)"""
+    try:
+        logger.info(f"OTP for {email}: {otp}")
+        # TODO: Implement real email sending here
+        return True
+    except Exception as e:
+        logger.error(f"Email send failed: {str(e)}")
+        return False
+
+def cleanup_expired_otps():
+    """Remove expired OTP entries from database"""
+    try:
+        expired = OTPVerification.query.filter(
+            OTPVerification.expires_at < datetime.utcnow()
+        ).delete()
+        db.session.commit()
+        logger.info(f"Cleaned up {expired} expired OTPs")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"OTP cleanup failed: {str(e)}")
+
+# ---------------------------- #
+#      Login Manager Setup      #
+# ---------------------------- #
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Auth Routes
+# ---------------------------- #
+#        Error Handlers         #
+# ---------------------------- #
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('403.html'), 403
+
+@app.errorhandler(500)
+def internal_error(e):
+    db.session.rollback()
+    return render_template('500.html'), 500
+
+# ---------------------------- #
+#        Auth Routes            #
+# ---------------------------- #
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """Handle user registration with OTP verification"""
     if current_user.is_authenticated:
         return redirect(url_for('home'))
     
     if request.method == 'POST':
         try:
-            username = request.form['username']
-            email = request.form['email']
-            phone = request.form['phone']
-            password = request.form['password']
+            form_data = {
+                'username': request.form['username'].strip(),
+                'email': request.form['email'].lower().strip(),
+                'phone': request.form['phone'].strip(),
+                'password': request.form['password']
+            }
             
-            user = User.query.filter(
-                (User.username == username) | 
-                (User.email == email) | 
-                (User.phone == phone)
-            ).first()
-            
-            if user:
+            if User.query.filter(or_(
+                User.username == form_data['username'],
+                User.email == form_data['email'],
+                User.phone == form_data['phone']
+            )).first():
                 flash('Username, email or phone already exists', 'danger')
                 return redirect(url_for('register'))
             
-            new_user = User(username=username, email=email, phone=phone)
-            new_user.set_password(password)
+            new_user = User(**form_data)
+            new_user.set_password(form_data['password'])
+            
             db.session.add(new_user)
             db.session.commit()
-            login_user(new_user)
-            flash('Registration successful!', 'success')
-            return redirect(url_for('home'))
+            
+            # Generate and store OTP
+            otp = generate_otp()
+            db.session.add(OTPVerification(
+                user_id=new_user.id,
+                otp=otp,
+                expires_at=datetime.utcnow() + timedelta(minutes=10)
+            ))
+            db.session.commit()
+            
+            if not send_otp_via_email(new_user.email, otp):
+                logger.error(f"Failed to send OTP to {new_user.email}")
+                flash('Error sending verification code', 'danger')
+                return redirect(url_for('register'))
+            
+            session.update({
+                'verify_user_id': new_user.id,
+                'verify_email': new_user.email
+            })
+            return redirect(url_for('verify_otp'))
+            
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f'Registration error: {str(e)}')
-            flash('Error during registration. Please try again.', 'danger')
+            logger.error(f"Registration error: {str(e)}")
+            flash('Registration failed. Please try again.', 'danger')
     
     return render_template('register.html')
+
+@app.route('/verify-otp', methods=['GET', 'POST'])
+def verify_otp():
+    """Handle OTP verification process"""
+    verification_data = {
+        'user_id': session.get('verify_user_id'),
+        'email': session.get('verify_email')
+    }
+    
+    if not all(verification_data.values()):
+        flash('Verification session expired', 'danger')
+        return redirect(url_for('register'))
+    
+    user = User.query.filter_by(
+        id=verification_data['user_id'],
+        email=verification_data['email']
+    ).first()
+    
+    if not user:
+        flash('Invalid verification session', 'danger')
+        return redirect(url_for('register'))
+    
+    if request.method == 'POST':
+        cleanup_expired_otps()  # Cleanup before verification
+        
+        otp = request.form.get('otp', '').strip()
+        verification = OTPVerification.query.filter(
+            OTPVerification.user_id == user.id,
+            OTPVerification.used == False,
+            OTPVerification.expires_at >= datetime.utcnow()
+        ).order_by(OTPVerification.created_at.desc()).first()
+        
+        if verification and verification.otp == otp:
+            verification.used = True
+            user.verified = True
+            db.session.commit()
+            
+            login_user(user)
+            session.pop('verify_user_id', None)
+            session.pop('verify_email', None)
+            
+            flash('Email verification successful!', 'success')
+            return redirect(url_for('home'))
+        
+        flash('Invalid or expired verification code', 'danger')
+    
+    return render_template('verify_otp.html', email=user.email)
+
+@app.route('/resend-otp', methods=['POST'])
+@limiter.limit("3 per hour")
+def resend_otp():
+    """Handle OTP resend requests"""
+    verification_data = {
+        'user_id': session.get('verify_user_id'),
+        'email': session.get('verify_email')
+    }
+    
+    if not all(verification_data.values()):
+        flash('Session expired', 'danger')
+        return redirect(url_for('register'))
+    
+    user = User.query.filter_by(
+        id=verification_data['user_id'],
+        email=verification_data['email']
+    ).first()
+    
+    if not user:
+        flash('Invalid session', 'danger')
+        return redirect(url_for('register'))
+    
+    # Invalidate existing OTPs
+    OTPVerification.query.filter_by(user_id=user.id).update({'used': True})
+    
+    # Generate new OTP
+    otp = generate_otp()
+    db.session.add(OTPVerification(
+        user_id=user.id,
+        otp=otp,
+        expires_at=datetime.utcnow() + timedelta(minutes=10)
+    ))
+    db.session.commit()
+    
+    if send_otp_via_email(user.email, otp):
+        flash('New verification code sent', 'success')
+    else:
+        flash('Failed to resend code', 'danger')
+    
+    return redirect(url_for('verify_otp'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -277,10 +478,28 @@ def list_categories():
     categories = Category.query.order_by(Category.name).all()
     return ", ".join([f"{cat.id}: {cat.name}" for cat in categories])
 
-# Manually seed default categories on app startup
-with app.app_context():
-    seed_default_categories()
+# ... (Keep other routes unchanged from previous version with improved error handling)
+
+# ---------------------------- #
+#      App Initialization       #
+# ---------------------------- #
+
+@app.cli.command("seed-categories")
+def seed_categories():
+    """Seed default categories"""
+    default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
+    try:
+        for name in default_categories:
+            if not Category.query.filter_by(name=name).first():
+                db.session.add(Category(name=name))
+        db.session.commit()
+        logger.info("Categories seeded successfully")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Category seeding failed: {str(e)}")
 
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+        seed_categories()
     app.run()
-

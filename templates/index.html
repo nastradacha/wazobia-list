@@ -104,25 +104,34 @@
         </div>
 
         <!-- Ads Grid -->
+        <!-- In the Ads Grid section, correct the card body structure -->
         <div class="row">
             {% for listing in listings %}
             <div class="col-md-4 mb-4">
                 <div class="card h-100 shadow-sm">
                     <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between">
-                            <span class="badge bg-secondary mb-2">
+                        <!-- Badges Section - Fixed -->
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="badge bg-secondary">
                                 {{ listing.category.name if listing.category else 'General' }}
                             </span>
-                            <small class="text-muted">{{ listing.location }}</small>
+                            {% if listing.user.verified %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> Verified Seller
+                            </span>
+                            {% endif %}
                         </div>
+
+                        <!-- Card Content -->
                         <h5 class="card-title">{{ listing.title }}</h5>
                         <h6 class="text-success mb-3">₦{{ listing.price }}</h6>
                         <p class="card-text flex-grow-1">{{ listing.description|truncate(100) }}</p>
                         
+                        <!-- Edit/Delete Buttons -->
                         {% if current_user.is_authenticated and listing.user_id == current_user.id %}
                         <div class="mt-2 d-flex gap-2">
                             <a href="{{ url_for('edit_ad', id=listing.id) }}" 
-                               class="btn btn-sm btn-warning">
+                            class="btn btn-sm btn-warning">
                                 <i class="bi bi-pencil"></i> Edit
                             </a>
                             <form action="{{ url_for('delete_ad', id=listing.id) }}" method="POST">
@@ -134,16 +143,18 @@
                         </div>
                         {% endif %}
 
+                        <!-- WhatsApp Button -->
                         <div class="mt-auto">
                             <a href="https://wa.me/{{ listing.phone }}?text=Hi! I saw your {{ listing.title }} on Wazobia List" 
-                               class="btn btn-success w-100">
-                               <i class="bi bi-whatsapp"></i> Contact Seller
+                            class="btn btn-success w-100">
+                            <i class="bi bi-whatsapp"></i> Contact Seller
                             </a>
                         </div>
                     </div>
                 </div>
             </div>
             {% else %}
+            <!-- No Ads Found Section -->
             <div class="col-12">
                 <div class="text-center py-5">
                     <i class="bi bi-exclamation-circle fs-1 text-muted"></i>
