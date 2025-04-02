@@ -3,7 +3,7 @@ services:
     name: wazobia-list
     runtime: python
     buildCommand: |
-      pip install -r requirements.txt &&
+      pip install -r requirements.txt 
     startCommand: |
       flask db upgrade &&
       flask seed-categories &&

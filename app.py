@@ -37,6 +37,12 @@ app.config.update(
 # ---------------------------- #
 
 db = SQLAlchemy(app)
+# with app.app_context():
+#     try:
+#         db.create_all()
+#         Category.__table__.create(db.engine, checkfirst=True)
+#     except Exception as e:
+#         logger.error(f"Table creation error: {str(e)}")
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
