@@ -60,24 +60,29 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-# Database initialization command
+# Optional CLI command for database initialization (not used in production)
 @app.cli.command("init-db")
 def init_db():
     """Initialize the database with default categories"""
     with app.app_context():
         try:
             db.create_all()
-            default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
-            for name in default_categories:
-                if not Category.query.filter_by(name=name).first():
-                    db.session.add(Category(name=name))
-                    app.logger.info(f'Added category: {name}')
-            db.session.commit()
+            seed_default_categories()  # Call the seeding function
             app.logger.info('Database initialized successfully')
         except Exception as e:
             app.logger.error(f'Database initialization failed: {str(e)}')
             db.session.rollback()
             raise e
+
+# Seed default categories on first request if missing
+@app.before_first_request
+def seed_default_categories():
+    default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
+    for name in default_categories:
+        if not Category.query.filter_by(name=name).first():
+            db.session.add(Category(name=name))
+            app.logger.info(f'Seeded category: {name}')
+    db.session.commit()
 
 # Login manager setup
 @login_manager.user_loader
@@ -118,7 +123,6 @@ def register():
             login_user(new_user)
             flash('Registration successful!', 'success')
             return redirect(url_for('home'))
-            
         except Exception as e:
             db.session.rollback()
             app.logger.error(f'Registration error: {str(e)}')
@@ -176,7 +180,6 @@ def home():
             selected_category=category_id,
             search_query=search_query
         )
-        
     except Exception as e:
         app.logger.error(f"Homepage error: {str(e)}")
         flash("Error loading listings. Please try again later.", "danger")
@@ -218,7 +221,6 @@ def post_ad():
 @login_required
 def edit_ad(id):
     listing = Listing.query.get_or_404(id)
-    
     if listing.user_id != current_user.id:
         abort(403)
     
@@ -248,14 +250,13 @@ def edit_ad(id):
             app.logger.error(f"Ad update error: {str(e)}")
             flash(f"Error updating ad: {str(e)}", "danger")
     
-    categories = Category.query.all()
+    categories = Category.query.order_by(Category.name).all()
     return render_template("edit.html", listing=listing, categories=categories)
 
 @app.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete_ad(id):
     listing = Listing.query.get_or_404(id)
-    
     if listing.user_id != current_user.id:
         abort(403)
     
@@ -269,7 +270,6 @@ def delete_ad(id):
         flash(f"Error deleting ad: {str(e)}", "danger")
     
     return redirect(url_for("home"))
-
 
 @app.route('/migration-version')
 def migration_version():
@@ -289,34 +289,6 @@ def check_password_hash_length():
 def list_categories():
     categories = Category.query.order_by(Category.name).all()
     return ", ".join([f"{cat.id}: {cat.name}" for cat in categories])
-
-
-@app.route('/seed-categories')
-def seed_categories():
-    default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
-    for name in default_categories:
-        if not Category.query.filter_by(name=name).first():
-            db.session.add(Category(name=name))
-    db.session.commit()
-    return "Default categories seeded."
-
-
-
-
-# @app.route('/force-init')
-# def force_init():
-#     try:
-#         db.create_all()
-#         return "Database tables created."
-#     except Exception as e:
-#         return f"Error: {str(e)}"
-
-
-# @app.route('/reset-db')
-# def reset_db():
-#     db.drop_all()
-#     return "Database dropped."
-
 
 if __name__ == "__main__":
     app.run()
