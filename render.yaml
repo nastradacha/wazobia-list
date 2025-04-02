@@ -13,7 +13,7 @@ services:
       - key: FLASK_APP
         value: "app.py"
       - key: DATABASE_URL
-        value: postgresql://wazobia_db_xszu_user:ozIy44XO5SjuDmNw4uZdquY1GDJWUfd3@dpg-cvlfau15pdvs73dcebog-a/wazobia_db_xszu
+        value: postgresql://wazobia_db_xszu_user:ozIy44XO5SjuDmNw4uZdquY1GDJWUfd3@dpg-cvlfau15pdvs73dcebog-a/wazobia_db_xszu?options=-c%20search_path=public
       - key: SECRET_KEY
         generateValue: true
         
