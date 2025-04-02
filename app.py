@@ -60,22 +60,22 @@ class Listing(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
-# Optional CLI command for database initialization (not used in production)
+# Optional CLI command for database initialization (for local testing)
 @app.cli.command("init-db")
 def init_db():
     """Initialize the database with default categories"""
     with app.app_context():
         try:
             db.create_all()
-            seed_default_categories()  # Call the seeding function
+            seed_default_categories()  # Seed the default categories
             app.logger.info('Database initialized successfully')
         except Exception as e:
             app.logger.error(f'Database initialization failed: {str(e)}')
             db.session.rollback()
             raise e
 
-# Seed default categories on first request if missing
-@app.before_first_request
+# Seed default categories before serving requests
+@app.before_serving
 def seed_default_categories():
     default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
     for name in default_categories:
@@ -123,6 +123,7 @@ def register():
             login_user(new_user)
             flash('Registration successful!', 'success')
             return redirect(url_for('home'))
+            
         except Exception as e:
             db.session.rollback()
             app.logger.error(f'Registration error: {str(e)}')
@@ -180,6 +181,7 @@ def home():
             selected_category=category_id,
             search_query=search_query
         )
+        
     except Exception as e:
         app.logger.error(f"Homepage error: {str(e)}")
         flash("Error loading listings. Please try again later.", "danger")
@@ -189,7 +191,6 @@ def home():
 @login_required
 def post_ad():
     try:
-        # Convert category_id from string to integer if provided
         category_id = request.form.get("category_id")
         if category_id:
             try:
@@ -232,7 +233,6 @@ def edit_ad(id):
             listing.description = request.form["description"]
             listing.phone = request.form["phone"]
             
-            # Convert category_id from string to integer if provided
             category_id = request.form.get("category_id")
             if category_id:
                 try:
