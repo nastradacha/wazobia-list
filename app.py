@@ -285,6 +285,15 @@ def check_password_hash_length():
     length = result.fetchone()[0]
     return f"password_hash column length: {length}"
 
+@app.route('/force-init')
+def force_init():
+    try:
+        db.create_all()
+        return "Database tables created."
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
 # @app.route('/reset-db')
 # def reset_db():
 #     db.drop_all()
