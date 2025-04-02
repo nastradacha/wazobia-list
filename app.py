@@ -67,16 +67,15 @@ def init_db():
     with app.app_context():
         try:
             db.create_all()
-            seed_default_categories()  # Seed the default categories
+            seed_default_categories()
             app.logger.info('Database initialized successfully')
         except Exception as e:
             app.logger.error(f'Database initialization failed: {str(e)}')
             db.session.rollback()
             raise e
 
-# Seed default categories before serving requests
-@app.before_serving
 def seed_default_categories():
+    """Seed default categories if none exist."""
     default_categories = ['Electronics', 'Furniture', 'Vehicles', 'Fashion']
     for name in default_categories:
         if not Category.query.filter_by(name=name).first():
@@ -112,18 +111,13 @@ def register():
                 flash('Username, email or phone already exists', 'danger')
                 return redirect(url_for('register'))
             
-            new_user = User(
-                username=username,
-                email=email,
-                phone=phone
-            )
+            new_user = User(username=username, email=email, phone=phone)
             new_user.set_password(password)
             db.session.add(new_user)
             db.session.commit()
             login_user(new_user)
             flash('Registration successful!', 'success')
             return redirect(url_for('home'))
-            
         except Exception as e:
             db.session.rollback()
             app.logger.error(f'Registration error: {str(e)}')
@@ -174,14 +168,9 @@ def home():
         
         categories = Category.query.order_by(Category.name).all()
         
-        return render_template(
-            "index.html",
-            listings=listings.all(),
-            categories=categories,
-            selected_category=category_id,
-            search_query=search_query
-        )
-        
+        return render_template("index.html", listings=listings.all(),
+                               categories=categories, selected_category=category_id,
+                               search_query=search_query)
     except Exception as e:
         app.logger.error(f"Homepage error: {str(e)}")
         flash("Error loading listings. Please try again later.", "danger")
@@ -200,15 +189,13 @@ def post_ad():
         else:
             category_id = None
 
-        new_ad = Listing(
-            title=request.form["title"],
-            price=request.form["price"],
-            location=request.form.get("location", "Lagos"),
-            description=request.form["description"],
-            phone=request.form["phone"],
-            category_id=category_id,
-            user_id=current_user.id
-        )
+        new_ad = Listing(title=request.form["title"],
+                         price=request.form["price"],
+                         location=request.form.get("location", "Lagos"),
+                         description=request.form["description"],
+                         phone=request.form["phone"],
+                         category_id=category_id,
+                         user_id=current_user.id)
         db.session.add(new_ad)
         db.session.commit()
         flash("Ad posted successfully!", "success")
@@ -290,5 +277,10 @@ def list_categories():
     categories = Category.query.order_by(Category.name).all()
     return ", ".join([f"{cat.id}: {cat.name}" for cat in categories])
 
+# Manually seed default categories on app startup
+with app.app_context():
+    seed_default_categories()
+
 if __name__ == "__main__":
     app.run()
+
