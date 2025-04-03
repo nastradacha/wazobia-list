@@ -7,14 +7,14 @@ services:
     startCommand: |
       flask db upgrade &&
       flask seed-categories &&
-      gunicorn app:app
+      gunicorn --worker-class gevent --workers 4 app:app
     envVars:
       - key: FLASK_ENV
         value: production
       - key: FLASK_APP
         value: "app.py"
       - key: DATABASE_URL
-        value: postgresql://wazobia_db_xszu_user:ozIy44XO5SjuDmNw4uZdquY1GDJWUfd3@dpg-cvlfau15pdvs73dcebog-a/wazobia_db_xszu?options=-c%20search_path=public
+        value: postgresql://wazobia_db_pjpf_user:sN2H8Wzmv32eP8BQPzQpQ2pWTUKwmiUr@dpg-cvmslo7gi27c73bcsuug-a.oregon-postgres.render.com:5432/wazobia_db_pjpf
       - key: SECRET_KEY
         generateValue: true
 
