@@ -1,6 +1,7 @@
 import os
 import logging
 import random
+import requests
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 # ---------------------------- #
-#      Extension Initialization #
+#      Extension Initialization
 # ---------------------------- #
 
 db = SQLAlchemy()
@@ -26,7 +27,7 @@ login_manager = LoginManager()
 limiter = Limiter(storage_uri="memory://", key_func=get_remote_address)
 
 # ---------------------------- #
-#      Database Models         #
+#      Database Models
 # ---------------------------- #
 
 class User(UserMixin, db.Model):
@@ -91,16 +92,16 @@ class OTPVerification(db.Model):
         return f'<OTPVerification {self.user_id}>'
 
 # ---------------------------- #
-#      Application Factory      #
+#      Application Factory
 # ---------------------------- #
 
 def create_app(config_overrides=None):
     app = Flask(__name__)
     
-    load_dotenv() 
+    load_dotenv()  # load local .env if present
     
     app.config.update(
-        SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644'),
+        SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret-key'),
         SQLALCHEMY_DATABASE_URI=os.getenv(
             'DATABASE_URL', 
             'postgresql://wazobia_db_pjpf_user:password@localhost:5432/wazobia_db'
@@ -128,7 +129,7 @@ def create_app(config_overrides=None):
     # Configure login manager
     login_manager.login_view = 'login'
     
-    # Initialize logging
+    # Set up logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -143,21 +144,41 @@ def create_app(config_overrides=None):
     return app
 
 # ---------------------------- #
-#      Helper Functions         #
+#      Helper Functions
 # ---------------------------- #
 
 def generate_otp() -> str:
     return str(random.randint(100000, 999999))
 
 def send_otp_via_email(email: str, otp: str) -> bool:
+    """
+    Sends OTP via Mailgun.
+    Expects MAILGUN_API_KEY, MAILGUN_DOMAIN, and EMAIL_FROM to be set in environment variables.
+    """
     logger = logging.getLogger(__name__)
     try:
-        # In a real implementation, integrate with an email service.
-        # For now, log the OTP.
-        logger.info(f"Sending OTP to {email}: {otp}")
-        return True
+        mailgun_api_key = os.environ.get("MAILGUN_API_KEY")
+        mailgun_domain = os.environ.get("MAILGUN_DOMAIN")
+        from_email = os.environ.get("EMAIL_FROM", "no-reply@yourdomain.com")
+        
+        subject = "Your OTP Code for Wazobia List"
+        text_content = f"Your OTP is: {otp}. It will expire in 10 minutes."
+        
+        response = requests.post(
+            f"https://api.mailgun.net/v3/{mailgun_domain}/messages",
+            auth=("api", mailgun_api_key),
+            data={
+                "from": from_email,
+                "to": email,
+                "subject": subject,
+                "text": text_content,
+            },
+        )
+        
+        logger.info(f"Sent OTP to {email}: Status {response.status_code}")
+        return 200 <= response.status_code < 300
     except Exception as e:
-        logger.error(f"Email send failed: {str(e)}")
+        logger.error(f"Mailgun error: {str(e)}")
         return False
 
 def cleanup_expired_otps():
@@ -173,7 +194,7 @@ def cleanup_expired_otps():
         logger.error(f"OTP cleanup failed: {str(e)}")
 
 # ---------------------------- #
-#      Route Registration       #
+#      Route Registration
 # ---------------------------- #
 
 def register_routes(app):
@@ -366,7 +387,7 @@ def register_routes(app):
         return redirect(url_for('home'))
     
     # ------------------------------- #
-    #       OTP Verification Routes   #
+    #       OTP Verification Routes
     # ------------------------------- #
     
     @app.route('/send-otp')
@@ -383,7 +404,7 @@ def register_routes(app):
         new_otp = OTPVerification(user_id=current_user.id, otp=otp, expires_at=expires_at)
         db.session.add(new_otp)
         db.session.commit()
-        # Send OTP via email (for now)
+        # Send OTP via Mailgun
         if send_otp_via_email(current_user.email, otp):
             flash("OTP has been sent to your email address.", "info")
         else:
@@ -418,17 +439,15 @@ def register_routes(app):
                 return redirect(url_for('verify_otp'))
         return render_template('verify_otp.html', email=current_user.email)
     
-    # New endpoint for resending OTP
     @app.route('/resend-otp', methods=['POST'])
     @login_required
     def resend_otp():
-        # Simply redirect to the send_otp route to generate and send a new OTP
         return redirect(url_for('send_otp'))
     
     # End of route registration
 
 # ---------------------------- #
-#      Error Handlers           #
+#      Error Handlers
 # ---------------------------- #
 
 def register_error_handlers(app):
@@ -446,7 +465,7 @@ def register_error_handlers(app):
         return render_template('500.html'), 500
 
 # ---------------------------- #
-#      CLI Commands             #
+#      CLI Commands
 # ---------------------------- #
 
 def register_cli(app):
@@ -464,7 +483,7 @@ def register_cli(app):
             logging.error(f"Category seeding failed: {str(e)}")
 
 # ---------------------------- #
-#      Login Manager Setup      #
+#      Login Manager Setup
 # ---------------------------- #
 
 @login_manager.user_loader
@@ -472,11 +491,11 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ---------------------------- #
-#      Application Entry        #
+#      Expose the WSGI Application
 # ---------------------------- #
 
 app = create_app()
 
 if __name__ == "__main__":
-   
     app.run()
+
