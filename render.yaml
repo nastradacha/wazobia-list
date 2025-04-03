@@ -12,10 +12,11 @@ services:
       - key: FLASK_ENV
         value: production
       - key: FLASK_APP
-        value: "app.py"
+        value: "app:create_app"
       - key: DATABASE_URL
         value: postgresql://wazobia_db_pjpf_user:sN2H8Wzmv32eP8BQPzQpQ2pWTUKwmiUr@dpg-cvmslo7gi27c73bcsuug-a.oregon-postgres.render.com:5432/wazobia_db_pjpf
       - key: SECRET_KEY
         generateValue: true
+
 
         

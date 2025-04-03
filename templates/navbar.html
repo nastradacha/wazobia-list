@@ -23,6 +23,10 @@
                         {% endif %}
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        {% if not current_user.verified %}
+                        <li><a class="dropdown-item" href="{{ url_for('send_otp') }}">Verify Phone</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% endif %}
                         <li><a class="dropdown-item" href="#">My Profile</a></li>
                         <li><a class="dropdown-item" href="#">My Ads</a></li>
                         <li><hr class="dropdown-divider"></li>

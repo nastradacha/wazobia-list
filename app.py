@@ -2,10 +2,8 @@ import os
 import logging
 import random
 from datetime import datetime, timedelta
-from flask import (
-    Flask, render_template, request, redirect,
-    url_for, flash, abort, session
-)
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, session
+from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import (
@@ -99,46 +97,49 @@ class OTPVerification(db.Model):
 def create_app(config_overrides=None):
     app = Flask(__name__)
     
-    # Configure application
+    load_dotenv() 
+    
     app.config.update(
         SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret-key-22aa0cd08a839a23a061c102ce4bd644'),
-        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 
-    'postgresql://wazobia_db_pjpf_user:sN2H8Wzmv32eP8BQPzQpQ2pWTUKwmiUr@dpg-cvmslo7gi27c73bcsuug-a.oregon-postgres.render.com:5432/wazobia_db_pjpf'),
+        SQLALCHEMY_DATABASE_URI=os.getenv(
+            'DATABASE_URL', 
+            'postgresql://wazobia_db_pjpf_user:password@localhost:5432/wazobia_db'
+        ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SECURE=os.getenv('FLASK_ENV') == 'production',
         PERMANENT_SESSION_LIFETIME=timedelta(hours=2),
         SQLALCHEMY_ENGINE_OPTIONS={
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-    }
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+        }
     )
-
+    print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
     if config_overrides:
         app.config.update(config_overrides)
-
+    
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
-    limiter.init_app(app) 
-
+    limiter.init_app(app)
+    
     # Configure login manager
     login_manager.login_view = 'login'
-
+    
     # Initialize logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-
-    # Register routes
+    
+    # Register routes, CLI commands, and error handlers
     with app.app_context():
         register_routes(app)
         register_cli(app)
         register_error_handlers(app)
-
+    
     return app
 
 # ---------------------------- #
@@ -151,7 +152,9 @@ def generate_otp() -> str:
 def send_otp_via_email(email: str, otp: str) -> bool:
     logger = logging.getLogger(__name__)
     try:
-        logger.info(f"OTP for {email}: {otp}")
+        # In a real implementation, integrate with an email service.
+        # For now, log the OTP.
+        logger.info(f"Sending OTP to {email}: {otp}")
         return True
     except Exception as e:
         logger.error(f"Email send failed: {str(e)}")
@@ -195,27 +198,247 @@ def register_routes(app):
             app.logger.error(f"Homepage error: {str(e)}")
             flash("Error loading listings. Please try again later.", "danger")
             return redirect(url_for('home'))
-
-    # Add all other route definitions here following the same pattern
-    # (Login, logout, register, etc. - maintain original route code)
-    # ... [rest of your route definitions] ...
+    
+    @app.route('/post', methods=["POST"])
+    @login_required
+    def post_ad():
+        try:
+            category_id = request.form.get("category_id")
+            if category_id:
+                try:
+                    category_id = int(category_id)
+                except ValueError:
+                    category_id = None
+            else:
+                category_id = None
+    
+            new_ad = Listing(
+                title=request.form["title"],
+                price=request.form["price"],
+                location=request.form.get("location", "Lagos"),
+                description=request.form["description"],
+                phone=request.form["phone"],
+                category_id=category_id,
+                user_id=current_user.id
+            )
+            db.session.add(new_ad)
+            db.session.commit()
+            flash("Ad posted successfully!", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Ad post error: {str(e)}")
+            flash(f"Error: {str(e)}", "danger")
+        return redirect(url_for("home"))
+    
+    @app.route('/edit/<int:id>', methods=['GET', 'POST'])
+    @login_required
+    def edit_ad(id):
+        listing = Listing.query.get_or_404(id)
+        if listing.user_id != current_user.id:
+            abort(403)
+    
+        if request.method == 'POST':
+            try:
+                listing.title = request.form["title"]
+                listing.price = request.form["price"]
+                listing.location = request.form.get("location", "Lagos")
+                listing.description = request.form["description"]
+                listing.phone = request.form["phone"]
+    
+                category_id = request.form.get("category_id")
+                if category_id:
+                    try:
+                        listing.category_id = int(category_id)
+                    except ValueError:
+                        listing.category_id = None
+                else:
+                    listing.category_id = None
+    
+                db.session.commit()
+                flash("Ad updated successfully!", "success")
+                return redirect(url_for("home"))
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Ad update error: {str(e)}")
+                flash(f"Error updating ad: {str(e)}", "danger")
+    
+        categories = Category.query.order_by(Category.name).all()
+        return render_template("edit.html", listing=listing, categories=categories)
+    
+    @app.route('/delete/<int:id>', methods=['POST'])
+    @login_required
+    def delete_ad(id):
+        listing = Listing.query.get_or_404(id)
+        if listing.user_id != current_user.id:
+            abort(403)
+    
+        try:
+            db.session.delete(listing)
+            db.session.commit()
+            flash("Ad deleted successfully!", "success")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Ad delete error: {str(e)}")
+            flash(f"Error deleting ad: {str(e)}", "danger")
+    
+        return redirect(url_for("home"))
+    
+    @app.route('/migration-version')
+    def migration_version():
+        result = db.session.execute(text("SELECT version_num FROM alembic_version"))
+        version = result.fetchone()[0]
+        return f"Current migration revision: {version}"
+    
+    @app.route('/check-password-hash-length')
+    def check_password_hash_length():
+        result = db.session.execute(text(
+            "SELECT character_maximum_length FROM information_schema.columns "
+            "WHERE table_name = 'user' AND column_name = 'password_hash';"))
+        length = result.fetchone()[0]
+        return f"password_hash column length: {length}"
+    
+    @app.route('/list-categories')
+    def list_categories():
+        categories = Category.query.order_by(Category.name).all()
+        return ", ".join([f"{cat.id}: {cat.name}" for cat in categories])
+    
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for('home'))
+    
+        if request.method == 'POST':
+            identifier = request.form['identifier']
+            password = request.form['password']
+    
+            user = User.query.filter(
+                (User.username == identifier) | 
+                (User.email == identifier) | 
+                (User.phone == identifier)
+            ).first()
+    
+            if user and user.check_password(password):
+                login_user(user)
+                return redirect(url_for('home'))
+    
+            flash('Invalid credentials', 'danger')
+        return render_template('login.html')
+    
+    @app.route('/register', methods=['GET', 'POST'])
+    def register():
+        if current_user.is_authenticated:
+            return redirect(url_for('home'))
+    
+        if request.method == 'POST':
+            username = request.form.get('username')
+            email = request.form.get('email')
+            phone = request.form.get('phone')
+            password = request.form.get('password')
+    
+            existing_user = User.query.filter(
+                (User.username == username) | 
+                (User.email == email) | 
+                (User.phone == phone)
+            ).first()
+            if existing_user:
+                flash("A user with these details already exists.", "danger")
+                return redirect(url_for('register'))
+    
+            new_user = User(username=username, email=email, phone=phone)
+            new_user.set_password(password)
+    
+            try:
+                db.session.add(new_user)
+                db.session.commit()
+                flash("Registration successful! Please login and verify your phone.", "success")
+                return redirect(url_for('login'))
+            except Exception as e:
+                db.session.rollback()
+                app.logger.error(f"Registration error: {str(e)}")
+                flash("Error during registration. Please try again.", "danger")
+    
+        return render_template('register.html')
+    
+    @app.route('/logout')
+    @login_required
+    def logout():
+        logout_user()
+        return redirect(url_for('home'))
+    
+    # ------------------------------- #
+    #       OTP Verification Routes   #
+    # ------------------------------- #
+    
+    @app.route('/send-otp')
+    @login_required
+    def send_otp():
+        if current_user.verified:
+            flash("Your phone number is already verified.", "info")
+            return redirect(url_for('home'))
+        # Remove any unused OTPs for the user
+        OTPVerification.query.filter_by(user_id=current_user.id, used=False).delete()
+        db.session.commit()
+        otp = generate_otp()
+        expires_at = datetime.utcnow() + timedelta(minutes=10)
+        new_otp = OTPVerification(user_id=current_user.id, otp=otp, expires_at=expires_at)
+        db.session.add(new_otp)
+        db.session.commit()
+        # Send OTP via email (for now)
+        if send_otp_via_email(current_user.email, otp):
+            flash("OTP has been sent to your email address.", "info")
+        else:
+            flash("Failed to send OTP. Please try again.", "danger")
+        return redirect(url_for('verify_otp'))
+    
+    @app.route('/verify-otp', methods=['GET', 'POST'])
+    @login_required
+    def verify_otp():
+        if current_user.verified:
+            flash("Your phone number is already verified.", "info")
+            return redirect(url_for('home'))
+        if request.method == 'POST':
+            user_input = request.form.get('otp')
+            if not user_input:
+                flash("Please enter the OTP.", "warning")
+                return redirect(url_for('verify_otp'))
+            # Look up an OTP record that matches the user and the input
+            otp_record = OTPVerification.query.filter_by(user_id=current_user.id, otp=user_input, used=False).first()
+            if otp_record:
+                if otp_record.expires_at < datetime.utcnow():
+                    flash("OTP has expired. Please request a new one.", "danger")
+                    return redirect(url_for('send_otp'))
+                else:
+                    otp_record.used = True
+                    current_user.verified = True
+                    db.session.commit()
+                    flash("Your phone number has been verified successfully!", "success")
+                    return redirect(url_for('home'))
+            else:
+                flash("Invalid OTP. Please try again.", "danger")
+                return redirect(url_for('verify_otp'))
+        return render_template('verify_otp.html', email=current_user.email)
+    
+    # New endpoint for resending OTP
+    @app.route('/resend-otp', methods=['POST'])
+    @login_required
+    def resend_otp():
+        # Simply redirect to the send_otp route to generate and send a new OTP
+        return redirect(url_for('send_otp'))
+    
+    # End of route registration
 
 # ---------------------------- #
 #      Error Handlers           #
 # ---------------------------- #
 
 def register_error_handlers(app):
-    @app.errorhandler(503)
-    def service_unavailable(e):
-        return render_template('503.html'), 503
+    @app.errorhandler(403)
+    def forbidden(e):
+        return render_template('403.html'), 403
 
     @app.errorhandler(404)
     def page_not_found(e):
         return render_template('404.html'), 404
-
-    @app.errorhandler(403)
-    def forbidden(e):
-        return render_template('403.html'), 403
 
     @app.errorhandler(500)
     def internal_error(e):
